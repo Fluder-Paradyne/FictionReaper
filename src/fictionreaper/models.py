@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 
 class UrlKind(StrEnum):
@@ -13,6 +13,13 @@ class UrlKind(StrEnum):
 
     FICTION = "fiction"
     CHAPTER = "chapter"
+
+
+class OutputFormat(StrEnum):
+    """Output formats a download can produce."""
+
+    MARKDOWN = "markdown"
+    EPUB = "epub"
 
 
 class ResolvedURL(BaseModel):
@@ -71,12 +78,12 @@ class ChapterContent(BaseModel):
 
 
 class WrittenChapter(BaseModel):
-    """A chapter written to disk."""
+    """A chapter produced by a download (path set when Markdown was written)."""
 
     model_config = ConfigDict(frozen=True)
 
     chapter: ChapterContent
-    path: Path
+    path: Path | None = None
 
 
 class DownloadRequest(BaseModel):
@@ -87,8 +94,44 @@ class DownloadRequest(BaseModel):
     url: HttpUrl
     output_dir: Path = Path("downloads")
     delay_seconds: float = Field(default=1.0, ge=0.0)
-    write_epub: bool = True
+    formats: tuple[OutputFormat, ...] = (OutputFormat.MARKDOWN, OutputFormat.EPUB)
     user_agent: str = "FictionReaper/0.1 (+https://github.com/Fluder-Paradyne/FictionReaper)"
+
+    @field_validator("formats", mode="before")
+    @classmethod
+    def _coerce_formats(cls, value: object) -> tuple[OutputFormat, ...]:
+        if value is None:
+            return (OutputFormat.MARKDOWN, OutputFormat.EPUB)
+        raw_items: list[object]
+        if isinstance(value, str):
+            raw_items = [p.strip() for p in value.split(",") if p.strip()]
+        elif isinstance(value, (set, frozenset, list, tuple)):
+            raw_items = list(value)
+        else:
+            raise TypeError("formats must be a string or sequence of format names")
+
+        parsed: list[OutputFormat] = []
+        for item in raw_items:
+            if isinstance(item, OutputFormat):
+                parsed.append(item)
+            else:
+                parsed.append(OutputFormat(str(item).strip().lower()))
+
+        seen: set[OutputFormat] = set()
+        unique: list[OutputFormat] = []
+        for fmt in parsed:
+            if fmt not in seen:
+                seen.add(fmt)
+                unique.append(fmt)
+        if not unique:
+            raise ValueError("formats must include at least one of: markdown, epub")
+        return tuple(unique)
+
+    def wants_markdown(self) -> bool:
+        return OutputFormat.MARKDOWN in self.formats
+
+    def wants_epub(self) -> bool:
+        return OutputFormat.EPUB in self.formats
 
 
 class DownloadResult(BaseModel):
@@ -102,4 +145,5 @@ class DownloadResult(BaseModel):
     output_dir: Path
     chapters: list[WrittenChapter]
     kind: UrlKind
+    formats: tuple[OutputFormat, ...]
     epub_path: Path | None = None

@@ -86,6 +86,8 @@ def test_download_endpoint(
     assert len(payload["chapters"]) == 3
     assert payload["epub_path"].endswith(".epub")
     assert Path(payload["epub_path"]).exists()
+    assert "markdown" in payload["formats"]
+    assert "epub" in payload["formats"]
 
 
 def test_download_invalid_url(client: TestClient) -> None:
@@ -94,3 +96,50 @@ def test_download_invalid_url(client: TestClient) -> None:
         json={"url": "https://example.com/not-rr", "delay_seconds": 0.0},
     )
     assert response.status_code == 422
+
+
+def test_download_format_markdown_only(
+    client: TestClient,
+    fiction_html: str,
+    tmp_path: Path,
+) -> None:
+    def ch_html(title: str, body: str) -> str:
+        return f"""<!DOCTYPE html><html><body>
+        <h1>{title}</h1>
+        <div class="chapter-inner chapter-content"><p>{body}</p></div>
+        </body></html>"""
+
+    with respx.mock(assert_all_called=False) as router:
+        cover_png = (Path(__file__).parent / "fixtures" / "cover.png").read_bytes()
+        router.get(url__regex=r"https://www\.royalroadcdn\.com/.*").mock(
+            return_value=httpx.Response(
+                200, content=cover_png, headers={"Content-Type": "image/png"}
+            )
+        )
+        router.get(FICTION_URL).mock(
+            return_value=httpx.Response(200, text=fiction_html)
+        )
+        router.get(CHAPTER_URL).mock(
+            return_value=httpx.Response(200, text=ch_html("C1", "A"))
+        )
+        router.get(CHAPTER2_URL).mock(
+            return_value=httpx.Response(200, text=ch_html("C2", "B"))
+        )
+        router.get(CHAPTER3_URL).mock(
+            return_value=httpx.Response(200, text=ch_html("C3", "C"))
+        )
+        response = client.post(
+            "/download",
+            json={
+                "url": FICTION_URL,
+                "output_dir": str(tmp_path),
+                "delay_seconds": 0.0,
+                "formats": ["markdown"],
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["formats"] == ["markdown"]
+    assert payload["epub_path"] is None
+    assert payload["chapters"][0]["path"] is not None

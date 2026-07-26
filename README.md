@@ -51,7 +51,10 @@ uv run fictionreaper download "https://www.royalroad.com/fiction/21220/mother-of
 
 # Options
 uv run fictionreaper download <url> --output-dir ./downloads --delay 1.0
-uv run fictionreaper download <url> --no-epub   # Markdown only
+uv run fictionreaper download <url> --format markdown
+uv run fictionreaper download <url> --format epub
+uv run fictionreaper download <url> -f markdown -f epub
+uv run fictionreaper download <url> --format markdown,epub
 uv run fictionreaper --version
 ```
 
@@ -72,7 +75,7 @@ curl -s -X POST http://127.0.0.1:8000/download \
     "url": "https://www.royalroad.com/fiction/21220/mother-of-learning/chapter/301778/1-good-morning-brother",
     "output_dir": "downloads",
     "delay_seconds": 1.0,
-    "write_epub": true
+    "formats": ["markdown", "epub"]
   }'
 ```
 

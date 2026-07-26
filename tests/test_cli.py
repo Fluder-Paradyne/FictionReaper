@@ -78,3 +78,52 @@ def test_cli_download(
     assert result.exit_code == 0, result.output
     assert "Downloaded 3" in result.output
     assert "EPUB:" in result.output
+
+
+def test_cli_format_markdown_only(
+    fiction_html: str,
+    tmp_path: Path,
+) -> None:
+    def ch_html(title: str, body: str) -> str:
+        return f"""<!DOCTYPE html><html><body>
+        <h1>{title}</h1>
+        <div class="chapter-inner chapter-content"><p>{body}</p></div>
+        </body></html>"""
+
+    with respx.mock(assert_all_called=False) as router:
+        cover_png = (Path(__file__).parent / "fixtures" / "cover.png").read_bytes()
+        router.get(url__regex=r"https://www\.royalroadcdn\.com/.*").mock(
+            return_value=httpx.Response(
+                200, content=cover_png, headers={"Content-Type": "image/png"}
+            )
+        )
+        router.get(FICTION_URL).mock(
+            return_value=httpx.Response(200, text=fiction_html)
+        )
+        router.get(CHAPTER_URL).mock(
+            return_value=httpx.Response(200, text=ch_html("C1", "A"))
+        )
+        router.get(CHAPTER2_URL).mock(
+            return_value=httpx.Response(200, text=ch_html("C2", "B"))
+        )
+        router.get(CHAPTER3_URL).mock(
+            return_value=httpx.Response(200, text=ch_html("C3", "C"))
+        )
+        result = runner.invoke(
+            app,
+            [
+                "download",
+                FICTION_URL,
+                "--output-dir",
+                str(tmp_path),
+                "--delay",
+                "0",
+                "--format",
+                "markdown",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert "EPUB:" not in result.output
+    assert list(tmp_path.rglob("*.md"))
+    assert not list(tmp_path.rglob("*.epub"))

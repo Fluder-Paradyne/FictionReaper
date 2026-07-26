@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from fictionreaper.models import DownloadRequest
+from fictionreaper.models import DownloadRequest, OutputFormat
 from fictionreaper.pipeline import download
 
 FICTION_URL = "https://www.royalroad.com/fiction/21220/mother-of-learning"
@@ -129,7 +129,7 @@ async def test_download_single_chapter(
 
 
 @pytest.mark.asyncio
-async def test_download_skip_epub(
+async def test_download_markdown_only(
     fiction_html: str,
     chapter_html: str,
     tmp_path: Path,
@@ -151,11 +151,47 @@ async def test_download_skip_epub(
             url=CHAPTER_URL,  # type: ignore[arg-type]
             output_dir=tmp_path,
             delay_seconds=0.0,
-            write_epub=False,
+            formats=(OutputFormat.MARKDOWN,),
         )
         result = await download(request)
 
     assert len(result.chapters) == 1
+    assert result.chapters[0].path is not None
     assert result.chapters[0].path.exists()
     assert result.epub_path is None
+    assert result.formats == (OutputFormat.MARKDOWN,)
     assert not list(tmp_path.rglob("*.epub"))
+
+
+@pytest.mark.asyncio
+async def test_download_epub_only(
+    fiction_html: str,
+    chapter_html: str,
+    tmp_path: Path,
+) -> None:
+    with respx.mock(assert_all_called=False) as router:
+        cover_png = (Path(__file__).parent / "fixtures" / "cover.png").read_bytes()
+        router.get(url__regex=r"https://www\.royalroadcdn\.com/.*").mock(
+            return_value=httpx.Response(
+                200, content=cover_png, headers={"Content-Type": "image/png"}
+            )
+        )
+        router.get(CHAPTER_URL).mock(
+            return_value=httpx.Response(200, text=chapter_html)
+        )
+        router.get(FICTION_URL).mock(
+            return_value=httpx.Response(200, text=fiction_html)
+        )
+        request = DownloadRequest(
+            url=CHAPTER_URL,  # type: ignore[arg-type]
+            output_dir=tmp_path,
+            delay_seconds=0.0,
+            formats=(OutputFormat.EPUB,),
+        )
+        result = await download(request)
+
+    assert len(result.chapters) == 1
+    assert result.chapters[0].path is None
+    assert result.epub_path is not None
+    assert result.epub_path.exists()
+    assert not list(tmp_path.rglob("*.md"))

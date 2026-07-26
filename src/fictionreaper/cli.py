@@ -10,12 +10,12 @@ import typer
 
 from fictionreaper import __version__
 from fictionreaper.exceptions import FictionReaperError
-from fictionreaper.models import DownloadRequest, DownloadResult
+from fictionreaper.models import DownloadRequest, DownloadResult, OutputFormat
 from fictionreaper.pipeline import download
 
 app: typer.Typer = typer.Typer(
     name="fictionreaper",
-    help="Download Royal Road fiction chapters as Markdown and EPUB.",
+    help="Download Royal Road fiction chapters as Markdown and/or EPUB.",
     add_completion=False,
     no_args_is_help=True,
     invoke_without_command=False,
@@ -26,6 +26,33 @@ def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"fictionreaper {__version__}")
         raise typer.Exit()
+
+
+def _parse_formats(values: list[str]) -> tuple[OutputFormat, ...]:
+    """Parse repeated and/or comma-separated --format values."""
+    parsed: list[OutputFormat] = []
+    for value in values:
+        for part in value.split(","):
+            token: str = part.strip().lower()
+            if not token:
+                continue
+            try:
+                parsed.append(OutputFormat(token))
+            except ValueError as exc:
+                allowed: str = ", ".join(f.value for f in OutputFormat)
+                raise typer.BadParameter(
+                    f"Invalid format {token!r}. Choose from: {allowed}"
+                ) from exc
+    if not parsed:
+        raise typer.BadParameter("At least one --format is required")
+    # dedupe preserve order
+    seen: set[OutputFormat] = set()
+    unique: list[OutputFormat] = []
+    for fmt in parsed:
+        if fmt not in seen:
+            seen.add(fmt)
+            unique.append(fmt)
+    return tuple(unique)
 
 
 @app.callback()
@@ -40,7 +67,7 @@ def _root(
         ),
     ] = None,
 ) -> None:
-    """FictionReaper — Royal Road → Markdown + EPUB."""
+    """FictionReaper — Royal Road → Markdown and/or EPUB."""
     _ = version
 
 
@@ -63,24 +90,34 @@ def download_cmd(
             help="Seconds to wait between HTTP requests",
         ),
     ] = 1.0,
-    no_epub: Annotated[
-        bool,
+    format: Annotated[
+        list[str] | None,
         typer.Option(
-            "--no-epub",
-            help="Skip writing an EPUB (Markdown only)",
+            "--format",
+            "-f",
+            help=(
+                "Output format: markdown and/or epub. "
+                "Repeat or comma-separate (default: markdown,epub)."
+            ),
         ),
-    ] = False,
+    ] = None,
 ) -> None:
     """Download chapters for a fiction homepage or a single chapter URL."""
     if delay < 0:
         typer.secho("Error: --delay must be >= 0", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
+    formats: tuple[OutputFormat, ...]
+    if format is None:
+        formats = (OutputFormat.MARKDOWN, OutputFormat.EPUB)
+    else:
+        formats = _parse_formats(format)
+
     request: DownloadRequest = DownloadRequest(
         url=url,  # type: ignore[arg-type]
         output_dir=output_dir,
         delay_seconds=delay,
-        write_epub=not no_epub,
+        formats=formats,
     )
     try:
         result: DownloadResult = asyncio.run(download(request))
@@ -97,7 +134,8 @@ def download_cmd(
         fg=typer.colors.GREEN,
     )
     for written in result.chapters:
-        typer.echo(f"  {written.path}")
+        if written.path is not None:
+            typer.echo(f"  {written.path}")
     if result.epub_path is not None:
         typer.echo(f"  EPUB: {result.epub_path}")
 

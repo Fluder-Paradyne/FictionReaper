@@ -9,12 +9,12 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from fictionreaper import __version__
 from fictionreaper.exceptions import FictionReaperError, InvalidURLError
-from fictionreaper.models import DownloadRequest, DownloadResult, UrlKind
+from fictionreaper.models import DownloadRequest, DownloadResult, OutputFormat, UrlKind
 from fictionreaper.pipeline import download
 
 app: FastAPI = FastAPI(
     title="FictionReaper",
-    description="Download Royal Road chapters as Markdown files and EPUB.",
+    description="Download Royal Road chapters as Markdown and/or EPUB.",
     version=__version__,
 )
 
@@ -27,7 +27,11 @@ class DownloadBody(BaseModel):
     url: HttpUrl
     output_dir: Path = Path("downloads")
     delay_seconds: float = Field(default=1.0, ge=0.0)
-    write_epub: bool = True
+    formats: list[OutputFormat] = Field(
+        default_factory=lambda: [OutputFormat.MARKDOWN, OutputFormat.EPUB],
+        min_length=1,
+        description="Output formats: markdown and/or epub",
+    )
 
 
 class WrittenChapterOut(BaseModel):
@@ -37,7 +41,7 @@ class WrittenChapterOut(BaseModel):
 
     title: str
     chapter_id: int
-    path: str
+    path: str | None
     source_url: str
 
 
@@ -51,6 +55,7 @@ class DownloadResponse(BaseModel):
     fiction_id: int
     output_dir: str
     kind: UrlKind
+    formats: list[OutputFormat]
     chapter_count: int
     chapters: list[WrittenChapterOut]
     epub_path: str | None = None
@@ -77,12 +82,12 @@ async def health() -> HealthResponse:
     status_code=status.HTTP_200_OK,
 )
 async def download_endpoint(body: DownloadBody) -> DownloadResponse:
-    """Scrape the given Royal Road URL and write Markdown files to disk."""
+    """Scrape the given Royal Road URL and write the requested formats to disk."""
     request: DownloadRequest = DownloadRequest(
         url=body.url,
         output_dir=body.output_dir,
         delay_seconds=body.delay_seconds,
-        write_epub=body.write_epub,
+        formats=tuple(body.formats),
     )
     try:
         result: DownloadResult = await download(request)
@@ -101,7 +106,7 @@ async def download_endpoint(body: DownloadBody) -> DownloadResponse:
         WrittenChapterOut(
             title=w.chapter.title,
             chapter_id=w.chapter.chapter_id,
-            path=str(w.path),
+            path=str(w.path) if w.path is not None else None,
             source_url=w.chapter.url,
         )
         for w in result.chapters
@@ -112,6 +117,7 @@ async def download_endpoint(body: DownloadBody) -> DownloadResponse:
         fiction_id=result.fiction_id,
         output_dir=str(result.output_dir),
         kind=result.kind,
+        formats=list(result.formats),
         chapter_count=len(result.chapters),
         chapters=chapters_out,
         epub_path=str(result.epub_path) if result.epub_path is not None else None,
