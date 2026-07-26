@@ -41,13 +41,15 @@ pip install "git+https://github.com/Fluder-Paradyne/FictionReaper.git"
 fictionreaper --version
 ```
 
-### Option D — pip from PyPI (when published)
+### Option D — PyPI (after first publish)
 
 ```bash
 pip install fictionreaper
 # or:  uv tool install fictionreaper
 # or:  pipx install fictionreaper
 ```
+
+Publishing notes for maintainers: [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
 ### Requirements
 

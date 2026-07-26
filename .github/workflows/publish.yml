@@ -4,10 +4,19 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Publish target"
+        required: true
+        default: pypi
+        type: choice
+        options:
+          - pypi
+          - testpypi
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write   # OIDC for Trusted Publishing
 
 jobs:
   publish:
@@ -29,11 +38,16 @@ jobs:
         run: |
           uv sync --all-groups
           uv run pytest -q
+          uv run mypy src
+          uv run ruff check src tests
 
       - name: Build
         run: uv build
 
+      - name: Publish to TestPyPI
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+        run: uv publish --publish-url https://test.pypi.org/legacy/
+
       - name: Publish to PyPI
-        # Requires a GitHub Environment named "pypi" with Trusted Publisher
-        # configured for this repo on https://pypi.org/manage/account/publishing/
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
         run: uv publish
