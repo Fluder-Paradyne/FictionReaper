@@ -1,0 +1,119 @@
+"""Small FastAPI server wrapping the download pipeline."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+from fictionreaper import __version__
+from fictionreaper.exceptions import FictionReaperError, InvalidURLError
+from fictionreaper.models import DownloadRequest, DownloadResult, UrlKind
+from fictionreaper.pipeline import download
+
+app: FastAPI = FastAPI(
+    title="FictionReaper",
+    description="Download Royal Road chapters as Markdown files.",
+    version=__version__,
+)
+
+
+class DownloadBody(BaseModel):
+    """JSON body for POST /download."""
+
+    model_config = ConfigDict(frozen=True)
+
+    url: HttpUrl
+    output_dir: Path = Path("downloads")
+    delay_seconds: float = Field(default=1.0, ge=0.0)
+
+
+class WrittenChapterOut(BaseModel):
+    """Serialized written chapter for API responses."""
+
+    model_config = ConfigDict(frozen=True)
+
+    title: str
+    chapter_id: int
+    path: str
+    source_url: str
+
+
+class DownloadResponse(BaseModel):
+    """API response for a completed download."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fiction_title: str
+    fiction_slug: str
+    fiction_id: int
+    output_dir: str
+    kind: UrlKind
+    chapter_count: int
+    chapters: list[WrittenChapterOut]
+
+
+class HealthResponse(BaseModel):
+    """Liveness payload."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: str
+    version: str
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    """Return service health."""
+    return HealthResponse(status="ok", version=__version__)
+
+
+@app.post(
+    "/download",
+    response_model=DownloadResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def download_endpoint(body: DownloadBody) -> DownloadResponse:
+    """Scrape the given Royal Road URL and write Markdown files to disk."""
+    request: DownloadRequest = DownloadRequest(
+        url=body.url,
+        output_dir=body.output_dir,
+        delay_seconds=body.delay_seconds,
+    )
+    try:
+        result: DownloadResult = await download(request)
+    except InvalidURLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    except FictionReaperError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    chapters_out: list[WrittenChapterOut] = [
+        WrittenChapterOut(
+            title=w.chapter.title,
+            chapter_id=w.chapter.chapter_id,
+            path=str(w.path),
+            source_url=w.chapter.url,
+        )
+        for w in result.chapters
+    ]
+    return DownloadResponse(
+        fiction_title=result.fiction_title,
+        fiction_slug=result.fiction_slug,
+        fiction_id=result.fiction_id,
+        output_dir=str(result.output_dir),
+        kind=result.kind,
+        chapter_count=len(result.chapters),
+        chapters=chapters_out,
+    )
+
+
+def create_app() -> FastAPI:
+    """Factory for tests and ASGI servers."""
+    return app
