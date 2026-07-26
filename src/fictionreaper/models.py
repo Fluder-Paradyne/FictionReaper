@@ -87,6 +87,7 @@ class DownloadRequest(BaseModel):
     url: HttpUrl
     output_dir: Path = Path("downloads")
     delay_seconds: float = Field(default=1.0, ge=0.0)
+    write_epub: bool = True
     user_agent: str = "FictionReaper/0.1 (+https://github.com/Fluder-Paradyne/FictionReaper)"
 
 
@@ -101,4 +102,4 @@ class DownloadResult(BaseModel):
     output_dir: Path
     chapters: list[WrittenChapter]
     kind: UrlKind
-    epub_path: Path
+    epub_path: Path | None = None

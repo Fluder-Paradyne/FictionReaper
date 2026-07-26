@@ -27,6 +27,7 @@ class DownloadBody(BaseModel):
     url: HttpUrl
     output_dir: Path = Path("downloads")
     delay_seconds: float = Field(default=1.0, ge=0.0)
+    write_epub: bool = True
 
 
 class WrittenChapterOut(BaseModel):
@@ -52,7 +53,7 @@ class DownloadResponse(BaseModel):
     kind: UrlKind
     chapter_count: int
     chapters: list[WrittenChapterOut]
-    epub_path: str
+    epub_path: str | None = None
 
 
 class HealthResponse(BaseModel):
@@ -81,6 +82,7 @@ async def download_endpoint(body: DownloadBody) -> DownloadResponse:
         url=body.url,
         output_dir=body.output_dir,
         delay_seconds=body.delay_seconds,
+        write_epub=body.write_epub,
     )
     try:
         result: DownloadResult = await download(request)
@@ -112,7 +114,7 @@ async def download_endpoint(body: DownloadBody) -> DownloadResponse:
         kind=result.kind,
         chapter_count=len(result.chapters),
         chapters=chapters_out,
-        epub_path=str(result.epub_path),
+        epub_path=str(result.epub_path) if result.epub_path is not None else None,
     )
 
 

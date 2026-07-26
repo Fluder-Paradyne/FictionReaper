@@ -63,6 +63,13 @@ def download_cmd(
             help="Seconds to wait between HTTP requests",
         ),
     ] = 1.0,
+    no_epub: Annotated[
+        bool,
+        typer.Option(
+            "--no-epub",
+            help="Skip writing an EPUB (Markdown only)",
+        ),
+    ] = False,
 ) -> None:
     """Download chapters for a fiction homepage or a single chapter URL."""
     if delay < 0:
@@ -73,6 +80,7 @@ def download_cmd(
         url=url,  # type: ignore[arg-type]
         output_dir=output_dir,
         delay_seconds=delay,
+        write_epub=not no_epub,
     )
     try:
         result: DownloadResult = asyncio.run(download(request))
@@ -90,7 +98,8 @@ def download_cmd(
     )
     for written in result.chapters:
         typer.echo(f"  {written.path}")
-    typer.echo(f"  EPUB: {result.epub_path}")
+    if result.epub_path is not None:
+        typer.echo(f"  EPUB: {result.epub_path}")
 
 
 def run() -> None:

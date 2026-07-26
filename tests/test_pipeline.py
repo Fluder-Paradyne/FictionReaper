@@ -89,6 +89,7 @@ async def test_download_fiction(
     for written in result.chapters:
         assert written.path.exists()
         assert "Body" in written.path.read_text(encoding="utf-8")
+    assert result.epub_path is not None
     assert result.epub_path.exists()
     assert result.epub_path.suffix == ".epub"
 
@@ -123,4 +124,38 @@ async def test_download_single_chapter(
     assert len(result.chapters) == 1
     assert result.chapters[0].path.name.startswith("0001-")
     assert result.chapters[0].path.exists()
+    assert result.epub_path is not None
     assert result.epub_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_download_skip_epub(
+    fiction_html: str,
+    chapter_html: str,
+    tmp_path: Path,
+) -> None:
+    with respx.mock(assert_all_called=False) as router:
+        cover_png = (Path(__file__).parent / "fixtures" / "cover.png").read_bytes()
+        router.get(url__regex=r"https://www\.royalroadcdn\.com/.*").mock(
+            return_value=httpx.Response(
+                200, content=cover_png, headers={"Content-Type": "image/png"}
+            )
+        )
+        router.get(CHAPTER_URL).mock(
+            return_value=httpx.Response(200, text=chapter_html)
+        )
+        router.get(FICTION_URL).mock(
+            return_value=httpx.Response(200, text=fiction_html)
+        )
+        request = DownloadRequest(
+            url=CHAPTER_URL,  # type: ignore[arg-type]
+            output_dir=tmp_path,
+            delay_seconds=0.0,
+            write_epub=False,
+        )
+        result = await download(request)
+
+    assert len(result.chapters) == 1
+    assert result.chapters[0].path.exists()
+    assert result.epub_path is None
+    assert not list(tmp_path.rglob("*.epub"))

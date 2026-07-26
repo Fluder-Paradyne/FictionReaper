@@ -47,7 +47,7 @@ async def _maybe_fetch_cover(
     return data if data else None
 
 
-async def _finish_with_epub(
+async def _finish_download(
     *,
     fiction_id: int,
     fiction_title: str,
@@ -58,20 +58,23 @@ async def _finish_with_epub(
     kind: UrlKind,
     cover_url: str | None,
     fetcher: AsyncFetcher,
+    write_epub: bool,
 ) -> DownloadResult:
-    cover_bytes: bytes | None = await _maybe_fetch_cover(fetcher, cover_url)
-    chapters: list[ChapterContent] = [w.chapter for w in written]
-    epub_path: Path = epub_output_path(out_dir, fiction_slug)
-    build_epub(
-        fiction_id=fiction_id,
-        fiction_title=fiction_title,
-        fiction_slug=fiction_slug,
-        author=author,
-        chapters=chapters,
-        output_path=epub_path,
-        cover_bytes=cover_bytes,
-        cover_url=cover_url,
-    )
+    epub_path: Path | None = None
+    if write_epub:
+        cover_bytes: bytes | None = await _maybe_fetch_cover(fetcher, cover_url)
+        chapters: list[ChapterContent] = [w.chapter for w in written]
+        epub_path = epub_output_path(out_dir, fiction_slug)
+        build_epub(
+            fiction_id=fiction_id,
+            fiction_title=fiction_title,
+            fiction_slug=fiction_slug,
+            author=author,
+            chapters=chapters,
+            output_path=epub_path,
+            cover_bytes=cover_bytes,
+            cover_url=cover_url,
+        )
     return DownloadResult(
         fiction_title=fiction_title,
         fiction_slug=fiction_slug,
@@ -102,7 +105,7 @@ async def _download_fiction(
             }
         )
         written.append(write_chapter(chapter, output_dir=out_dir, index=ref.index))
-    return await _finish_with_epub(
+    return await _finish_download(
         fiction_id=meta.fiction_id,
         fiction_title=meta.title,
         fiction_slug=meta.slug,
@@ -112,6 +115,7 @@ async def _download_fiction(
         kind=UrlKind.FICTION,
         cover_url=meta.cover_url,
         fetcher=fetcher,
+        write_epub=request.write_epub,
     )
 
 
@@ -156,7 +160,7 @@ async def _download_single_chapter(
     )
     out_dir: Path = request.output_dir / safe_filename_component(chapter.fiction_slug)
     written_one: WrittenChapter = write_chapter(chapter, output_dir=out_dir, index=index)
-    return await _finish_with_epub(
+    return await _finish_download(
         fiction_id=chapter.fiction_id,
         fiction_title=fiction_title,
         fiction_slug=chapter.fiction_slug,
@@ -166,6 +170,7 @@ async def _download_single_chapter(
         kind=UrlKind.CHAPTER,
         cover_url=cover_url,
         fetcher=fetcher,
+        write_epub=request.write_epub,
     )
 
 
@@ -190,7 +195,7 @@ async def download_chapter_refs(
             update={"fiction_title": fiction_title, "author": author}
         )
         written.append(write_chapter(chapter, output_dir=out_dir, index=ref.index))
-    return await _finish_with_epub(
+    return await _finish_download(
         fiction_id=fiction_id,
         fiction_title=fiction_title,
         fiction_slug=fiction_slug,
@@ -200,4 +205,5 @@ async def download_chapter_refs(
         kind=UrlKind.FICTION,
         cover_url=cover_url,
         fetcher=fetcher,
+        write_epub=request.write_epub,
     )
