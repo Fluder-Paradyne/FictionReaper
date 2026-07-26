@@ -361,6 +361,40 @@ def _html_to_markdown(container: Tag) -> str:
     return "\n".join(cleaned).strip() + "\n"
 
 
+def _emphasis_from_tag(node: Tag, marker: str) -> list[str]:
+    """Convert a ``strong``/``em`` tag to Markdown pieces.
+
+    Royal Road often writes titles as
+    ``<strong>Chapter 001<br></strong><strong>Title</strong>``.
+    We close emphasis before each ``<br>`` and emit a real newline so markers
+    never glue into ``****`` (which CommonMark will not render as bold).
+    """
+    pieces: list[str] = []
+    buffer: list[str] = []
+
+    def flush() -> None:
+        segment: str = "".join(buffer).strip()
+        buffer.clear()
+        if segment:
+            pieces.append(f"{marker}{segment}{marker}")
+
+    for child in node.children:
+        if isinstance(child, NavigableString):
+            buffer.append(str(child))
+            continue
+        if not isinstance(child, Tag):
+            continue
+        if child.name == "br":
+            flush()
+            pieces.append("\n")
+            continue
+        # Nested markup inside emphasis (e.g. strong > a, em > strong).
+        nested: str = _inline_markdown(child)
+        buffer.append(nested)
+    flush()
+    return pieces
+
+
 def _inline_markdown(node: Tag) -> str:
     parts: list[str] = []
 
@@ -372,12 +406,10 @@ def _inline_markdown(node: Tag) -> str:
         if name in {"script", "style"}:
             return
         if name in {"strong", "b"}:
-            inner: str = "".join(_collect_text(n))
-            parts.append(f"**{inner.strip()}**" if inner.strip() else "")
+            parts.extend(_emphasis_from_tag(n, "**"))
             return
         if name in {"em", "i"}:
-            inner = "".join(_collect_text(n))
-            parts.append(f"*{inner.strip()}*" if inner.strip() else "")
+            parts.extend(_emphasis_from_tag(n, "*"))
             return
         if name == "br":
             parts.append("\n")
@@ -395,19 +427,14 @@ def _inline_markdown(node: Tag) -> str:
             if isinstance(child, (Tag, NavigableString)):
                 walk_inline(child)
 
-    def _collect_text(n: Tag) -> list[str]:
-        out: list[str] = []
-        for child in n.children:
-            if isinstance(child, NavigableString):
-                out.append(str(child))
-            elif isinstance(child, Tag):
-                out.append(_inline_markdown(child))
-        return out
-
     walk_inline(node)
     text: str = "".join(parts)
+    # Collapse horizontal whitespace but keep hard line breaks from <br>.
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r" *\n *", "\n", text)
+    # Safety net: adjacent emphasis without a break still must not glue.
+    text = re.sub(r"\*\*\*\*", "** **", text)
+    text = re.sub(r"(?<!\*)\*(?!\*)(?=\*(?!\*))", "* ", text)
     return text.strip()
 
 

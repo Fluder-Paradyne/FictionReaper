@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fictionreaper.parse import parse_chapter_page, parse_fiction_page, slugify
 
 
@@ -36,6 +38,34 @@ def test_parse_chapter_page(chapter_html: str) -> None:
     assert "Good Morning" in chapter.title
     assert "Zorian" in chapter.markdown_body or "eyes" in chapter.markdown_body.lower()
     assert chapter.markdown_body.endswith("\n")
+
+
+def test_adjacent_strong_with_br_renders_as_separate_bold() -> None:
+    """RR title lines often use <strong>…<br></strong><strong>…</strong>."""
+    page_url = "https://www.royalroad.com/fiction/1/demo/chapter/2/title-line"
+    html = """<!DOCTYPE html>
+<html><body>
+<h1>Title Line</h1>
+<a href="/fiction/1/demo">Demo</a>
+<div class="chapter-inner chapter-content">
+<p style="text-align: center">
+<strong>Chapter 001<br></strong><strong>Good Morning Brother</strong>
+</p>
+<p>Body text with <em>emphasis</em> here.</p>
+</div>
+</body></html>
+"""
+    chapter = parse_chapter_page(html, page_url=page_url)
+    body = chapter.markdown_body
+    # Must not glue into **** (breaks bold rendering in CommonMark)
+    assert "****" not in body
+    assert "**Chapter 001**" in body
+    assert "**Good Morning Brother**" in body
+    # Prefer a line break between the two bold runs (from <br>)
+    assert re.search(
+        r"\*\*Chapter 001\*\*\s*\n\s*\*\*Good Morning Brother\*\*",
+        body,
+    )
 
 
 def test_html_tables_preserved_in_markdown() -> None:
