@@ -15,7 +15,7 @@ from fictionreaper.pipeline import download
 
 app: typer.Typer = typer.Typer(
     name="fictionreaper",
-    help="Download Royal Road fiction chapters as Markdown.",
+    help="Download Royal Road fiction chapters as Markdown and EPUB.",
     add_completion=False,
     no_args_is_help=True,
     invoke_without_command=False,
@@ -40,7 +40,7 @@ def _root(
         ),
     ] = None,
 ) -> None:
-    """FictionReaper — Royal Road → Markdown."""
+    """FictionReaper — Royal Road → Markdown + EPUB."""
     _ = version
 
 
@@ -90,6 +90,7 @@ def download_cmd(
     )
     for written in result.chapters:
         typer.echo(f"  {written.path}")
+    typer.echo(f"  EPUB: {result.epub_path}")
 
 
 def run() -> None:

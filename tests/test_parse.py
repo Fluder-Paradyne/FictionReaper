@@ -25,6 +25,8 @@ def test_parse_fiction_page(fiction_html: str) -> None:
     assert first.chapter_id == 301778
     assert "Good Morning" in first.title
     assert first.url.startswith("https://www.royalroad.com/")
+    assert meta.cover_url is not None
+    assert "mother-of-learning" in meta.cover_url or meta.cover_url.startswith("http")
 
 
 def test_parse_chapter_page(chapter_html: str) -> None:

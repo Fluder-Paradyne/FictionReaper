@@ -116,6 +116,17 @@ def parse_fiction_page(html: str, *, page_url: str) -> FictionMeta:
     if not chapters:
         raise ParseError("No chapters found on fiction page")
 
+    cover_url: str | None = None
+    og_image: Tag | None = soup.select_one('meta[property="og:image"]')
+    if og_image is not None and og_image.get("content"):
+        cover_url = str(og_image["content"]).strip() or None
+    if cover_url is None:
+        cover_img: Tag | None = soup.select_one("img.thumbnail") or soup.select_one(
+            ".cover-art-container img"
+        )
+        if cover_img is not None and cover_img.get("src"):
+            cover_url = str(cover_img["src"]).strip() or None
+
     meta: FictionMeta = FictionMeta(
         fiction_id=fiction_id,
         title=title,
@@ -123,6 +134,7 @@ def parse_fiction_page(html: str, *, page_url: str) -> FictionMeta:
         author=author,
         url=fiction_url(fiction_id, fiction_slug),
         chapters=chapters,
+        cover_url=cover_url,
     )
     return meta
 

@@ -14,7 +14,7 @@ from fictionreaper.pipeline import download
 
 app: FastAPI = FastAPI(
     title="FictionReaper",
-    description="Download Royal Road chapters as Markdown files.",
+    description="Download Royal Road chapters as Markdown files and EPUB.",
     version=__version__,
 )
 
@@ -52,6 +52,7 @@ class DownloadResponse(BaseModel):
     kind: UrlKind
     chapter_count: int
     chapters: list[WrittenChapterOut]
+    epub_path: str
 
 
 class HealthResponse(BaseModel):
@@ -111,6 +112,7 @@ async def download_endpoint(body: DownloadBody) -> DownloadResponse:
         kind=result.kind,
         chapter_count=len(result.chapters),
         chapters=chapters_out,
+        epub_path=str(result.epub_path),
     )
 
 

@@ -44,6 +44,13 @@ def test_cli_download(
         </body></html>"""
 
     with respx.mock(assert_all_called=False) as router:
+
+        cover_png = (Path(__file__).parent / "fixtures" / "cover.png").read_bytes()
+        router.get(url__regex=r"https://www\.royalroadcdn\.com/.*").mock(
+            return_value=httpx.Response(
+                200, content=cover_png, headers={"Content-Type": "image/png"}
+            )
+        )
         router.get(FICTION_URL).mock(
             return_value=httpx.Response(200, text=fiction_html)
         )
@@ -70,3 +77,4 @@ def test_cli_download(
 
     assert result.exit_code == 0, result.output
     assert "Downloaded 3" in result.output
+    assert "EPUB:" in result.output

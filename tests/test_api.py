@@ -51,6 +51,13 @@ def test_download_endpoint(
         </body></html>"""
 
     with respx.mock(assert_all_called=False) as router:
+
+        cover_png = (Path(__file__).parent / "fixtures" / "cover.png").read_bytes()
+        router.get(url__regex=r"https://www\.royalroadcdn\.com/.*").mock(
+            return_value=httpx.Response(
+                200, content=cover_png, headers={"Content-Type": "image/png"}
+            )
+        )
         router.get(FICTION_URL).mock(
             return_value=httpx.Response(200, text=fiction_html)
         )
@@ -77,6 +84,8 @@ def test_download_endpoint(
     assert payload["chapter_count"] == 3
     assert payload["fiction_id"] == 21220
     assert len(payload["chapters"]) == 3
+    assert payload["epub_path"].endswith(".epub")
+    assert Path(payload["epub_path"]).exists()
 
 
 def test_download_invalid_url(client: TestClient) -> None:

@@ -1,6 +1,6 @@
 # FictionReaper
 
-Download [Royal Road](https://www.royalroad.com/) fiction chapters as **Markdown** files.
+Download [Royal Road](https://www.royalroad.com/) fiction chapters as **Markdown** files and a single **EPUB**.
 
 Async-first Python tool with:
 
@@ -22,7 +22,11 @@ Files land under:
 ./downloads/<fiction-slug>/0001-chapter-slug.md
 ./downloads/<fiction-slug>/0002-chapter-slug.md
 ...
+./downloads/<fiction-slug>/<fiction-slug>.epub
 ```
+
+The EPUB includes a TOC, optional cover image (`og:image`), and chapter HTML
+(including preserved tables).
 
 Each file has YAML front matter (`title`, `fiction`, `source`, ids) plus a `#` heading and Markdown body.
 
@@ -90,6 +94,7 @@ src/fictionreaper/
   fetch.py       # httpx.AsyncClient wrapper
   parse.py       # BeautifulSoup → models
   write.py       # Markdown on disk
+  epub.py        # EPUB via ebooklib
   pipeline.py    # orchestration
   cli.py         # Typer
   api.py         # FastAPI

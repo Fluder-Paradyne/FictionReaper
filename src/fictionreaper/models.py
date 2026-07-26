@@ -51,6 +51,7 @@ class FictionMeta(BaseModel):
     author: str
     url: str
     chapters: list[ChapterRef]
+    cover_url: str | None = None
 
 
 class ChapterContent(BaseModel):
@@ -100,3 +101,4 @@ class DownloadResult(BaseModel):
     output_dir: Path
     chapters: list[WrittenChapter]
     kind: UrlKind
+    epub_path: Path
