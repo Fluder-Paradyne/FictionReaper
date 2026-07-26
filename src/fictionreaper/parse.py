@@ -127,8 +127,174 @@ def parse_fiction_page(html: str, *, page_url: str) -> FictionMeta:
     return meta
 
 
+# Structural table tags we keep when embedding HTML tables in Markdown.
+_TABLE_TAGS: frozenset[str] = frozenset(
+    {
+        "table",
+        "thead",
+        "tbody",
+        "tfoot",
+        "tr",
+        "th",
+        "td",
+        "caption",
+        "colgroup",
+        "col",
+    }
+)
+# Attributes safe/useful to keep on table elements (layout + accessibility).
+_TABLE_ATTRS: frozenset[str] = frozenset(
+    {
+        "colspan",
+        "rowspan",
+        "scope",
+        "headers",
+        "align",
+        "valign",
+        "span",  # col / colgroup
+    }
+)
+# Inline tags allowed inside table cells when serializing HTML tables.
+_TABLE_INLINE_TAGS: frozenset[str] = frozenset(
+    {
+        "strong",
+        "b",
+        "em",
+        "i",
+        "a",
+        "br",
+        "span",
+        "sub",
+        "sup",
+        "u",
+        "s",
+        "code",
+    }
+)
+
+
+def _escape_html_text(value: str) -> str:
+    """Escape text for embedding inside preserved HTML tables."""
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _attr_string(node: Tag, allowed: frozenset[str]) -> str:
+    """Build a space-prefixed attribute string from allowed attrs on ``node``."""
+    attrs: list[str] = []
+    for attr in allowed:
+        if not node.has_attr(attr):
+            continue
+        raw: str | list[str] = node.get(attr)  # type: ignore[assignment]
+        value: str = " ".join(raw) if isinstance(raw, list) else str(raw)
+        safe: str = _escape_html_text(value).replace('"', "&quot;")
+        attrs.append(f'{attr}="{safe}"')
+    if not attrs:
+        return ""
+    return " " + " ".join(attrs)
+
+
+def _serialize_table_cell_children(node: Tag) -> str:
+    """Serialize allowed inline markup inside a table cell."""
+    parts: list[str] = []
+    for child in node.children:
+        if isinstance(child, NavigableString):
+            parts.append(_escape_html_text(str(child)))
+            continue
+        if not isinstance(child, Tag):
+            continue
+        name: str | None = child.name
+        if name in {"script", "style", "noscript"}:
+            continue
+        if name == "br":
+            parts.append("<br/>")
+            continue
+        if name == "a":
+            href_val: str | list[str] = child.get("href") or ""
+            href_s: str = href_val if isinstance(href_val, str) else ""
+            inner: str = _serialize_table_cell_children(child)
+            if href_s:
+                safe_href: str = _escape_html_text(href_s).replace('"', "&quot;")
+                parts.append(f'<a href="{safe_href}">{inner}</a>')
+            else:
+                parts.append(inner)
+            continue
+        if name in _TABLE_INLINE_TAGS:
+            # Normalize presentational tags to semantic ones where useful.
+            tag_name: str = name
+            if name == "b":
+                tag_name = "strong"
+            elif name == "i":
+                tag_name = "em"
+            inner = _serialize_table_cell_children(child)
+            if tag_name == "span":
+                # Drop class-only spans from RR; keep text content.
+                parts.append(inner)
+            else:
+                parts.append(f"<{tag_name}>{inner}</{tag_name}>")
+            continue
+        # Unknown tags: keep their text/inline descendants only.
+        parts.append(_serialize_table_cell_children(child))
+    return "".join(parts)
+
+
+def _serialize_table_node(node: Tag) -> str:
+    """Serialize a table (or table subtree) to cleaned HTML."""
+    name: str | None = node.name
+    if name is None:
+        return ""
+    if name in {"script", "style", "noscript"}:
+        return ""
+
+    if name in {"th", "td"}:
+        attr_str: str = _attr_string(node, _TABLE_ATTRS)
+        inner: str = _serialize_table_cell_children(node).strip()
+        return f"<{name}{attr_str}>{inner}</{name}>"
+
+    if name in _TABLE_TAGS:
+        attr_str = _attr_string(node, _TABLE_ATTRS)
+        if name == "col":
+            return f"<{name}{attr_str}/>"
+        children_html: list[str] = []
+        for child in node.children:
+            if isinstance(child, Tag):
+                piece: str = _serialize_table_node(child)
+                if piece:
+                    children_html.append(piece)
+            elif isinstance(child, NavigableString) and name == "caption":
+                text: str = str(child).strip()
+                if text:
+                    children_html.append(_escape_html_text(text))
+        inner_joined: str = "".join(children_html)
+        return f"<{name}{attr_str}>{inner_joined}</{name}>"
+
+    # Non-table wrapper inside table (e.g. accidental div): flatten children
+    pieces: list[str] = []
+    for child in node.children:
+        if isinstance(child, Tag):
+            piece = _serialize_table_node(child)
+            if piece:
+                pieces.append(piece)
+    return "".join(pieces)
+
+
+def table_to_html(table: Tag) -> str:
+    """Return a cleaned HTML ``<table>...</table>`` suitable for Markdown embeds."""
+    if table.name != "table":
+        raise ValueError(f"Expected <table>, got <{table.name}>")
+    html: str = _serialize_table_node(table)
+    # Pretty-ish: put each major row on its own line for readability
+    html = re.sub(r"></(tr|thead|tbody|tfoot|table)>", r">\n</\1>", html)
+    html = re.sub(r"<(tr|thead|tbody|tfoot)([ >])", r"\n<\1\2", html)
+    html = re.sub(r"\n{2,}", "\n", html).strip()
+    return html + "\n"
+
+
 def _html_to_markdown(container: Tag) -> str:
-    """Convert chapter HTML into simple Markdown (paragraphs, emphasis, headers)."""
+    """Convert chapter HTML into Markdown, preserving HTML tables as HTML blocks."""
     lines: list[str] = []
 
     def walk(node: Tag | NavigableString) -> None:
@@ -136,6 +302,12 @@ def _html_to_markdown(container: Tag) -> str:
             return
         name: str | None = node.name
         if name in {"script", "style", "noscript"}:
+            return
+        if name == "table":
+            table_html: str = table_to_html(node).rstrip()
+            if table_html:
+                lines.append(table_html)
+                lines.append("")
             return
         if name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             level: int = int(name[1])

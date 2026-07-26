@@ -36,3 +36,51 @@ def test_parse_chapter_page(chapter_html: str) -> None:
     assert "Good Morning" in chapter.title
     assert "Zorian" in chapter.markdown_body or "eyes" in chapter.markdown_body.lower()
     assert chapter.markdown_body.endswith("\n")
+
+
+def test_html_tables_preserved_in_markdown() -> None:
+    """HTML tables should appear as HTML blocks inside the Markdown body."""
+    page_url = (
+        "https://www.royalroad.com/fiction/1/demo/chapter/2/with-table"
+    )
+    html = """<!DOCTYPE html>
+<html><body>
+<h1>With Table</h1>
+<a href="/fiction/1/demo">Demo Story</a>
+<div class="chapter-inner chapter-content">
+<p>Intro paragraph.</p>
+<table class="rr-junk cnMabcdef" style="width:100%">
+  <thead>
+    <tr>
+      <th class="noise">Stat</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Strength</strong></td>
+      <td colspan="1">10</td>
+    </tr>
+    <tr>
+      <td>Agility</td>
+      <td>12</td>
+    </tr>
+  </tbody>
+</table>
+<p>After the table.</p>
+</div>
+</body></html>
+"""
+    chapter = parse_chapter_page(html, page_url=page_url)
+    body = chapter.markdown_body
+    assert "Intro paragraph." in body
+    assert "After the table." in body
+    assert "<table>" in body
+    assert "</table>" in body
+    assert "<th>Stat</th>" in body
+    assert "<th>Value</th>" in body
+    assert "<td><strong>Strength</strong></td>" in body or "<td>**Strength**</td>" in body
+    assert 'colspan="1"' in body or "10" in body
+    # RR noise classes stripped from the preserved table
+    assert "rr-junk" not in body
+    assert "cnMabcdef" not in body
