@@ -1,21 +1,32 @@
 [project]
 name = "fictionreaper"
 version = "0.1.0"
-description = "Download Royal Road fiction chapters as Markdown (CLI + FastAPI)"
+description = "Download Royal Road fiction chapters as Markdown and EPUB (CLI + API)"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Fluder-Paradyne", email = "121793617+Fluder-Paradyne@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
-keywords = ["royal-road", "web-fiction", "scraper", "markdown", "epub-later"]
+keywords = [
+    "royal-road",
+    "web-fiction",
+    "scraper",
+    "markdown",
+    "epub",
+    "cli",
+    "fastapi",
+]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Framework :: FastAPI",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP",
@@ -38,6 +49,7 @@ dependencies = [
 Homepage = "https://github.com/Fluder-Paradyne/FictionReaper"
 Repository = "https://github.com/Fluder-Paradyne/FictionReaper"
 Issues = "https://github.com/Fluder-Paradyne/FictionReaper/issues"
+Changelog = "https://github.com/Fluder-Paradyne/FictionReaper/releases"
 
 [project.scripts]
 fictionreaper = "fictionreaper.cli:run"
@@ -76,7 +88,6 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-
 
 [[tool.mypy.overrides]]
 module = ["ebooklib", "ebooklib.*"]

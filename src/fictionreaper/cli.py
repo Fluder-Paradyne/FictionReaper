@@ -140,6 +140,34 @@ def download_cmd(
         typer.echo(f"  EPUB: {result.epub_path}")
 
 
+@app.command("serve")
+def serve_cmd(
+    host: Annotated[
+        str,
+        typer.Option("--host", help="Bind address"),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option("--port", "-p", help="Bind port"),
+    ] = 8000,
+    reload: Annotated[
+        bool,
+        typer.Option("--reload", help="Reload on code changes (development)"),
+    ] = False,
+) -> None:
+    """Run the FictionReaper HTTP API (FastAPI + uvicorn)."""
+    import uvicorn
+
+    typer.echo(f"Starting FictionReaper API on http://{host}:{port}")
+    typer.echo(f"OpenAPI docs: http://{host}:{port}/docs")
+    uvicorn.run(
+        "fictionreaper.api:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
 def run() -> None:
     """Console script entrypoint."""
     app()

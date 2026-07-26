@@ -127,3 +127,10 @@ def test_cli_format_markdown_only(
     assert "EPUB:" not in result.output
     assert list(tmp_path.rglob("*.md"))
     assert not list(tmp_path.rglob("*.epub"))
+
+
+def test_cli_serve_help() -> None:
+    result = runner.invoke(app, ["serve", "--help"])
+    assert result.exit_code == 0
+    assert "--host" in result.output
+    assert "--port" in result.output

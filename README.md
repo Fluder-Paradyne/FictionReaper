@@ -1,75 +1,105 @@
 # FictionReaper
 
-Download [Royal Road](https://www.royalroad.com/) fiction chapters as **Markdown** files and a single **EPUB**.
+Download [Royal Road](https://www.royalroad.com/) fiction as **Markdown** and/or **EPUB**.
 
-Async-first Python tool with:
+Works on **macOS** and **Linux** (Python 3.12+). Ships a CLI and a small HTTP API.
 
-- **CLI** (`fictionreaper download <url>`)
-- **Small FastAPI server** (`POST /download`)
-- **Pydantic** models and **strict typing** (`mypy --strict`)
-- Managed with **[uv](https://github.com/astral-sh/uv)**
+## Install (end users)
 
-## Features (v1)
+Pick one. All put a `fictionreaper` command on your `PATH`.
 
-| Input | Behavior |
-|-------|----------|
-| Fiction homepage URL | Download **all** chapters |
-| Chapter URL | Download **that** chapter |
+### Option A — uv tool (recommended)
 
-Files land under:
+Install [uv](https://docs.astral.sh/uv/), then:
+
+```bash
+uv tool install git+https://github.com/Fluder-Paradyne/FictionReaper.git
+fictionreaper --version
+```
+
+Upgrade later:
+
+```bash
+uv tool upgrade fictionreaper
+# or reinstall from git tip:
+uv tool install --force git+https://github.com/Fluder-Paradyne/FictionReaper.git
+```
+
+### Option B — pipx
+
+```bash
+pipx install git+https://github.com/Fluder-Paradyne/FictionReaper.git
+fictionreaper --version
+```
+
+### Option C — pip (venv)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install "git+https://github.com/Fluder-Paradyne/FictionReaper.git"
+fictionreaper --version
+```
+
+### Option D — pip from PyPI (when published)
+
+```bash
+pip install fictionreaper
+# or:  uv tool install fictionreaper
+# or:  pipx install fictionreaper
+```
+
+### Requirements
+
+| | |
+|--|--|
+| OS | macOS or Linux |
+| Python | **3.12+** (3.13 supported) |
+| Network | outbound HTTPS to `royalroad.com` / CDN |
+
+Native wheels for dependencies (`lxml`, etc.) are published for common Mac/Linux platforms; a normal install does not need a compiler in most cases.
+
+## Quick start
+
+```bash
+# One chapter → Markdown + EPUB (default)
+fictionreaper download \
+  "https://www.royalroad.com/fiction/21220/mother-of-learning/chapter/301778/1-good-morning-brother"
+
+# Whole fiction (many chapters — be polite with --delay)
+fictionreaper download \
+  "https://www.royalroad.com/fiction/21220/mother-of-learning" \
+  --delay 1.0
+
+# Formats
+fictionreaper download "<url>" --format markdown
+fictionreaper download "<url>" --format epub
+fictionreaper download "<url>" --format markdown,epub
+fictionreaper download "<url>" -f markdown -f epub
+
+# Output directory
+fictionreaper download "<url>" --output-dir ~/Books/rr
+```
+
+Output layout:
 
 ```text
-./downloads/<fiction-slug>/0001-chapter-slug.md
-./downloads/<fiction-slug>/0002-chapter-slug.md
-...
-./downloads/<fiction-slug>/<fiction-slug>.epub
+downloads/<fiction-slug>/
+  0001-chapter-slug.md
+  0002-chapter-slug.md
+  ...
+  <fiction-slug>.epub
 ```
 
-The EPUB includes a TOC, optional cover image (`og:image`), and chapter HTML
-(including preserved tables).
-
-Each file has YAML front matter (`title`, `fiction`, `source`, ids) plus a `#` heading and Markdown body.
-
-## Install
-
-Requires **Python 3.12+** and [uv](https://docs.astral.sh/uv/).
+## HTTP API
 
 ```bash
-git clone https://github.com/Fluder-Paradyne/FictionReaper.git
-cd FictionReaper
-uv sync --all-groups
-```
-
-## CLI
-
-```bash
-# Full fiction
-uv run fictionreaper download "https://www.royalroad.com/fiction/21220/mother-of-learning"
-
-# Single chapter
-uv run fictionreaper download "https://www.royalroad.com/fiction/21220/mother-of-learning/chapter/301778/1-good-morning-brother"
-
-# Options
-uv run fictionreaper download <url> --output-dir ./downloads --delay 1.0
-uv run fictionreaper download <url> --format markdown
-uv run fictionreaper download <url> --format epub
-uv run fictionreaper download <url> -f markdown -f epub
-uv run fictionreaper download <url> --format markdown,epub
-uv run fictionreaper --version
-```
-
-`--delay` is the polite pause (seconds) between HTTP requests (default `1.0`).
-
-## API
-
-```bash
-uv run uvicorn fictionreaper.api:app --reload --port 8000
+fictionreaper serve --host 127.0.0.1 --port 8000
+# docs: http://127.0.0.1:8000/docs
 ```
 
 ```bash
-curl -s http://127.0.0.1:8000/health
-
-curl -s -X POST http://127.0.0.1:8000/download \
+curl -sS -X POST 'http://127.0.0.1:8000/download' \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://www.royalroad.com/fiction/21220/mother-of-learning/chapter/301778/1-good-morning-brother",
@@ -79,38 +109,24 @@ curl -s -X POST http://127.0.0.1:8000/download \
   }'
 ```
 
-OpenAPI docs: `http://127.0.0.1:8000/docs`
-
 ## Development
 
 ```bash
+git clone https://github.com/Fluder-Paradyne/FictionReaper.git
+cd FictionReaper
 uv sync --all-groups
 uv run pytest
 uv run mypy src
 uv run ruff check src tests
-```
-
-## Project layout
-
-```text
-src/fictionreaper/
-  models.py      # Pydantic models
-  urls.py        # URL classify / normalize
-  fetch.py       # httpx.AsyncClient wrapper
-  parse.py       # BeautifulSoup → models
-  write.py       # Markdown on disk
-  epub.py        # EPUB via ebooklib
-  pipeline.py    # orchestration
-  cli.py         # Typer
-  api.py         # FastAPI
+uv build
 ```
 
 ## Ethics & legal
 
 - For **personal archival / offline reading** of content you are allowed to access.
 - Be polite: keep a non-zero `--delay`, don’t hammer the site.
-- Respect [Royal Road’s Terms of Service](https://www.royalroad.com/) and copyright. Redistributing scraped novels is not the purpose of this tool.
-- Identify your traffic: default User-Agent is `FictionReaper/0.1 (+https://github.com/Fluder-Paradyne/FictionReaper)`.
+- Respect [Royal Road’s Terms of Service](https://www.royalroad.com/) and copyright.
+- Default User-Agent: `FictionReaper/0.1 (+https://github.com/Fluder-Paradyne/FictionReaper)`.
 
 ## License
 
