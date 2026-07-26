@@ -130,7 +130,16 @@ def test_cli_format_markdown_only(
 
 
 def test_cli_serve_help() -> None:
-    result = runner.invoke(app, ["serve", "--help"])
-    assert result.exit_code == 0
-    assert "--host" in result.output
-    assert "--port" in result.output
+    import re
+
+    result = runner.invoke(
+        app,
+        ["serve", "--help"],
+        color=False,
+        env={"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "120"},
+    )
+    assert result.exit_code == 0, result.output
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+    assert "host" in plain.lower()
+    assert "port" in plain.lower()
+    assert "reload" in plain.lower()
